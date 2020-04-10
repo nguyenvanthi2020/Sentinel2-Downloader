@@ -142,7 +142,7 @@ class s2viet_dialog(QDialog, Ui_Dialogv):
         else:
             bands = ['B11', 'B8', 'B4']  # Vegetable analysis
         
-        S2_Collection = ee.ImageCollection("COPERNICUS/S2") \
+        S2_Collection = ee.ImageCollection("COPERNICUS/S2_SR") \
             .filterDate(ngayBatdau, ngayKetthuc).select(bands) \
             .filterBounds(commune_buffered) \
             .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', "less_than", may) \
@@ -158,7 +158,7 @@ class s2viet_dialog(QDialog, Ui_Dialogv):
 
         tmp = self.khoangngay(image_date1, khoang)
 
-        S22 = ee.ImageCollection("COPERNICUS/S2").filterDate(tmp['bd'], tmp['kt']) \
+        S22 = ee.ImageCollection("COPERNICUS/S2_SR").filterDate(tmp['bd'], tmp['kt']) \
             .select(bands) \
             .filterBounds(commune_buffered) \
             .median()
@@ -356,7 +356,7 @@ class s2world_dialog(QDialog, Ui_Dialogw):
         else:
             bands = ['B11', 'B8', 'B4']  # Vegetation Analysis
 
-        S2_Collection = ee.ImageCollection("COPERNICUS/S2") \
+        S2_Collection = ee.ImageCollection("COPERNICUS/S2_SR") \
             .filterDate(ngayBatdau, ngayKetthuc).select(bands) \
             .filterBounds(input_geometry) \
             .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', "less_than", may) \
@@ -376,7 +376,7 @@ class s2world_dialog(QDialog, Ui_Dialogw):
         else:
             name = self.outputName.text()
             
-        S22 = ee.ImageCollection("COPERNICUS/S2").filterDate(tmp['bd'], tmp['kt']) \
+        S22 = ee.ImageCollection("COPERNICUS/S2_SR").filterDate(tmp['bd'], tmp['kt']) \
             .select(bands) \
             .filterBounds(input_geometry) \
             .median() \
