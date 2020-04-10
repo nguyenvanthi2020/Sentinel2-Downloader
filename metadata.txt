@@ -6,7 +6,7 @@
 name=Sentinel-2 Download
 qgisMinimumVersion=3.0
 description=This plugin allows users to download the Sentinel-2 Satellite image from Google Earth Engine into QGIS and save to Google Drive.
-version=3.0
+version=3.1
 author=Nguyễn Văn Thị
 email=nguyenvanthi@ifee.edu.vn
 
@@ -21,7 +21,7 @@ repository=https://github.com/nguyenvanthi2020/Sentinel2-Download
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-# changelog=
+changelog=Use Sentinel-2 level 2A instead of level 1C.
 
 # Tags are comma separated with spaces allowed
 tags=python, satellite image, google earth engine, qgis
