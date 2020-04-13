@@ -37,6 +37,8 @@ class s2viet_dialog(QDialog, Ui_Dialogv):
         self.inputMay.setText('30')
         self.inputKhoang.setText('3')
         self.inputBuffer.setText('0')
+        self.dateKthuc.setDate(QtCore.QDate.currentDate())
+        self.dateBdau.setDate(QtCore.QDate.currentDate().addDays(-10))
         self.laydanhsachtinh()
         self.comboTinh.currentIndexChanged.connect(self.laydanhsachhuyen)
         self.comboHuyen.currentIndexChanged.connect(self.laydanhsachxa)
@@ -142,7 +144,7 @@ class s2viet_dialog(QDialog, Ui_Dialogv):
         else:
             bands = ['B11', 'B8', 'B4']  # Vegetable analysis
         
-        S2_Collection = ee.ImageCollection("COPERNICUS/S2_SR") \
+        S2_Collection = ee.ImageCollection("COPERNICUS/S2") \
             .filterDate(ngayBatdau, ngayKetthuc).select(bands) \
             .filterBounds(commune_buffered) \
             .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', "less_than", may) \
@@ -158,7 +160,7 @@ class s2viet_dialog(QDialog, Ui_Dialogv):
 
         tmp = self.khoangngay(image_date1, khoang)
 
-        S22 = ee.ImageCollection("COPERNICUS/S2_SR").filterDate(tmp['bd'], tmp['kt']) \
+        S22 = ee.ImageCollection("COPERNICUS/S2").filterDate(tmp['bd'], tmp['kt']) \
             .select(bands) \
             .filterBounds(commune_buffered) \
             .median()
@@ -288,20 +290,30 @@ class s2world_dialog(QDialog, Ui_Dialogw):
         self.setupUi(self)
         self.inputMayw.setText('30')
         self.inputKhoangw.setText('3')
-        
+        #set dates to the last 10 by default v
+        mapcrs = self.iface.mapCanvas().mapSettings().destinationCrs().authid()
+        if mapcrs != 'EPGS:4326':
+            QgsProject.instance().setCrs(QgsCoordinateReferenceSystem(4326))
+        self.dateKthucw.setDate(QtCore.QDate.currentDate())
+        self.dateBdauw.setDate(QtCore.QDate.currentDate().addDays(-10))
         self.rgb()
+        self.atmosCorrection()
+        self.fillCoords()
         self.buttonBoxw.accepted.connect(self.run)
+        self.fillCoordButton.clicked.connect(self.fillCoords) 
+        
+        # MD prefer to let user make their own choice of  basemaps - commented out
         # Add base map
-        base_map = QgsProject.instance().mapLayersByName('Google Satellite')
-        if len(base_map) == 0:
-            urlWithParams = 'type=xyz&url=https://mt1.google.com/vt/lyrs%3Ds%26x%3D%7Bx%7D%26y%3D%7By%7D%26z%3D%7Bz%7D&zmax=19&zmin=0'
-            rlayer = QgsRasterLayer(urlWithParams, 'Google Satellite', 'wms')
-            if rlayer.isValid():
-                QgsProject.instance().addMapLayer(rlayer)
-            else:
-                self.iface.messageBar().pushMessage(
-                    "Không mở được bản đồ nền!",
-                    level=Qgis.Success, duration=5)
+##        base_map = QgsProject.instance().mapLayersByName('Google Satellite')
+##        if len(base_map) == 0:
+##            urlWithParams = 'type=xyz&url=https://mt1.google.com/vt/lyrs%3Ds%26x%3D%7Bx%7D%26y%3D%7By%7D%26z%3D%7Bz%7D&zmax=19&zmin=0'
+##            rlayer = QgsRasterLayer(urlWithParams, 'Google Satellite', 'wms')
+##            if rlayer.isValid():
+##                QgsProject.instance().addMapLayer(rlayer)
+##            else:
+##                self.iface.messageBar().pushMessage(
+##                    "Không mở được bản đồ nền!",
+##                    level=Qgis.Success, duration=5)
 
     def run(self):
         batdau = self.dateBdauw.date()
@@ -309,23 +321,29 @@ class s2world_dialog(QDialog, Ui_Dialogw):
         bd_date = str(batdau)
         kt_date = str(ketthuc)
         # Get info
-
+ 
+            
         may = int(self.inputMayw.text())
         khoang = int(self.inputKhoangw.text())
 
         ngayBatdau = str(getdate(bd_date))
         ngayKetthuc = str(getdate(kt_date))
-
+        
         topLat_value = float(self.topLat.text())
         bottomLat_value = float(self.bottomLat.text())
         leftLong_value = float(self.leftLong.text())
         rightLong_value = float(self.rightLong.text())
-
+     
         input_geometry = ee.Geometry.Rectangle([leftLong_value, bottomLat_value, rightLong_value, topLat_value])
-
         lat = (topLat_value + bottomLat_value) / 2
         long = (leftLong_value + rightLong_value) / 2
-
+        
+ # Set image source for atmospheric collection selection
+        if self.comboAtmos.currentIndex() == 0:
+            imageSource = "COPERNICUS/S2_SR"  # Surface Reflectance
+        else: 
+            imageSource = "COPERNICUS/S2"  # Top of Atmosphere data
+            
         # Band combinations
         rgbMethod = self.comboRGBw.currentIndex()
         textrgb = self.comboRGBw.currentText()
@@ -356,50 +374,59 @@ class s2world_dialog(QDialog, Ui_Dialogw):
         else:
             bands = ['B11', 'B8', 'B4']  # Vegetation Analysis
 
-        S2_Collection = ee.ImageCollection("COPERNICUS/S2_SR") \
+        
+#MD collection now based on choice in dialogue
+        S2_Collection = ee.ImageCollection(imageSource) \
             .filterDate(ngayBatdau, ngayKetthuc).select(bands) \
             .filterBounds(input_geometry) \
             .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', "less_than", may) \
             .sort('CLOUD_COVERAGE_ASSESSMENT', True)
         # Get the first image in the collection
-        S2 = S2_Collection.first()
-
-        vizParams = {'bands': bands, 'min': 0, 'max': 2000, 'gamma': 0.8}
-
-        image_date1 = ee.Date(S2.get('system:time_start')).format('Y-M-d').getInfo()
+        
+#MD changed gamma to 2.2, supposedly good default for natural colour.  Maybe too high for TOA
+        vizParams = {'bands': bands, 'min': 0, 'max': 2000, 'gamma': self.gammaInput.value()}
 
         soluonganh = S2_Collection.size().getInfo()
+        if soluonganh > 0:
+            S2 = S2_Collection.first()
+            image_date1 = ee.Date(S2.get('system:time_start')).format('Y-M-d').getInfo()
+            tmp = getdatebubffer(image_date1, khoang)
+            if self.outputName.text() =='':
+                name = 'NotDefinedName'
+            else:
+                name = self.outputName.text()
+                
+            S22 = ee.ImageCollection(imageSource).filterDate(tmp['bd'], tmp['kt']) \
+                .select(bands) \
+                .filterBounds(input_geometry) \
+                .median() \
+                .clip(input_geometry)
+            Map.setCenter(long, lat, 13)
+            Map.addLayer(S2.clip(input_geometry), vizParams, "S2_" + name + '-' + textrgb + "_" + image_date1 + " (Single)")
+            Map.addLayer(S22, vizParams, "S2_" + name + '-' + textrgb + "_" + image_date1 + " (Median)")
+            Map.addLayer(input_geometry, {'color': 'red'}, name, False, 0.2)
 
-        tmp = getdatebubffer(image_date1, khoang)
-        if self.outputName.text() =='':
-            name = 'NotDefinedName'
-        else:
-            name = self.outputName.text()
-            
-        S22 = ee.ImageCollection("COPERNICUS/S2_SR").filterDate(tmp['bd'], tmp['kt']) \
-            .select(bands) \
-            .filterBounds(input_geometry) \
-            .median() \
-            .clip(input_geometry)
-        Map.setCenter(long, lat, 13)
-        Map.addLayer(S2.clip(input_geometry), vizParams, "S2_" + name + '-' + textrgb + "_" + image_date1 + " (Single)")
-        Map.addLayer(S22, vizParams, "S2_" + name + '-' + textrgb + "_" + image_date1 + " (Median)")
-        Map.addLayer(input_geometry, {'color': 'red'}, name, False, 0.2)
-        
-        ### Message bar info
-        self.iface.messageBar().pushMessage(
-            "Open Sentiel-2 image for costum location successfully!",
-            level=Qgis.Success, duration=10)
-        ### Save image to Google Drive3
-        export2Drive = self.checkBox.isChecked()
-        image = S22
-        if export2Drive == True:   
-            downConfig = {'scale': 10, "maxPixels": 1.0E13, 'driveFolder': 'image_gee'}
-            task = ee.batch.Export.image(image, name + '_' + image_date1, downConfig)
-            task.start()
+    #MD corrected spelling of Sentinel  and custom      
+            ### Message bar info
             self.iface.messageBar().pushMessage(
-                "The Sentiel-2 image is saved to folder image_ee on your Google Drive successfully!",
+                "Opened Sentinel-2 image for custom location successfully!",
                 level=Qgis.Success, duration=10)
+            ### Save image to Google Drive3
+
+            export2Drive = self.checkBox.isChecked()
+            image = S22
+            if export2Drive == True:   
+                downConfig = {'scale': 10, "maxPixels": 1.0E13, 'driveFolder': 'image_gee'}
+                task = ee.batch.Export.image(image, name + '_' + image_date1, downConfig)
+                task.start()
+                self.iface.messageBar().pushMessage(
+                    "The Sentinel-2 image was saved to folder image_ee on your Google Drive successfully!",
+                    level=Qgis.Success, duration=10)
+        else:
+            self.iface.messageBar().pushMessage(
+                "No image available for selected date range!",
+                level=Qgis.Success, duration=10)
+
 
     def rgb(self):
         self.comboRGBw.clear()
@@ -410,3 +437,16 @@ class s2world_dialog(QDialog, Ui_Dialogw):
                      'Land/Water (B8-B11-B4)', 'Natural Colors with Atmospheric Removal (B12-B8-B3)',
                      'Shortwave Infrared (B12-B8-B4)', 'Vegetation Analysis (B11-B8-B4)']
         self.comboRGBw.addItems(listTohop)
+   
+    def atmosCorrection(self):
+        self.comboAtmos.clear()
+        listAtmos = ['Corrected - Surface Reflectance (2017 on)',
+                     'No Correction - Top of Atmosphere Data']
+        self.comboAtmos.addItems(listAtmos)
+    
+    def fillCoords(self):
+        #fills input boxes with lat and long from canvas extent.  Doesn't correct for CRS, needs to be 4326.rounded to 4 dec place ~10m f"{numvar:.4f}"
+        self.topLat.setText(f"{self.iface.mapCanvas().extent().yMaximum():.4f}")
+        self.bottomLat.setText(f"{self.iface.mapCanvas().extent().yMinimum():.4f}")
+        self.leftLong.setText(f"{self.iface.mapCanvas().extent().xMinimum():.4f}")
+        self.rightLong.setText(f"{self.iface.mapCanvas().extent().xMaximum():.4f}")
