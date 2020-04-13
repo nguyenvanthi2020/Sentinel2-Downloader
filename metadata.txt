@@ -22,7 +22,7 @@ repository=https://github.com/nguyenvanthi2020/Sentinel2-Downloader
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
 
-changelog=Set Map CRS to EPGS:4326 automaticly.
+changelog=Set Map CRS to EPGS:4326 automatically.
 
 # Tags are comma separated with spaces allowed
 tags=python, satellite image, google earth engine, qgis
